@@ -1,6 +1,12 @@
 import datetime
 import re
 import json
+import time
+
+
+class Defaults:
+    limit = 1_000_000
+    log = "./access.log"
 
 
 def unique_ip(log_name: str, lines=10_000) -> int:
@@ -48,7 +54,7 @@ def parse_interval(log_name: str, interval: int, limit=0) -> None:
             ip = line[: line.find("-") - 1]
             ua = line.split('"')[5]
 
-            ts = re.findall(r"\[(\d+/\w+/\d+:\d+:\d+:\d+ [+-]?\d+)\]", line)
+            ts = re.findall(r"\[(\d+/\w+/\d+:\d+:\d+:\d+ [+-]?\d+)]", line)
             ts = datetime.datetime.strptime(
                 ts[0], "%d/%b/%Y:%H:%M:%S %z"
             )  # e.g. [22/Jan/2019:06:38:40 +0330]
@@ -77,22 +83,80 @@ def parse_interval(log_name: str, interval: int, limit=0) -> None:
                 # for client in clients_reqs:  # comment prev, line and uncomment this if needed
                 #     clients_reqs[client] = 0
 
-    with open("./dumps/log_clients_{}s.json".format(interval), "w") as result:
-        json.dump(clients_rpi, result)
+    with open("./dumps/log_clients_{}s.json".format(interval), "w") as outfile:
+        json.dump(clients_rpi, outfile, indent=4)
+
+
+def parse_deviation(log_name: str, limit=0) -> None:
+    clients_reqs = dict()
+
+    with open(log_name, "r") as log_file:
+        i = 0
+        for line in log_file:
+            i += 1
+            if limit != 0 and i >= limit:
+                break
+
+            ip = line[: line.find("-") - 1]
+            ua = line.split('"')[5]
+
+            ts = re.findall(r"\[(\d+/\w+/\d+:\d+:\d+:\d+ [+-]?\d+)]", line)
+            ts = datetime.datetime.strptime(
+                ts[0], "%d/%b/%Y:%H:%M:%S %z"
+            )  # e.g. [22/Jan/2019:06:38:40 +0330]
+            ts = time.mktime(ts.timetuple())
+
+            client = "{}:{}".format(ip, ua)
+            if client not in clients_reqs:
+                clients_reqs[client] = list()
+            clients_reqs[client].append(ts)
+
+    # Difference between the requests:
+    # [10, 16, 20, 25] => [16-10, 20-16, 25-20] => [6, 4, 5] => 5 sec. average difference between requests
+
+    # Calculate differences between neighbour timestamps
+    clients_diff = dict()
+    for client, stamps in clients_reqs.items():
+        clients_diff[client] = [
+            abs(stamps[i + 1] - stamps[i]) for i in range(len(stamps) - 1)
+        ]
+
+    with open("dumps/log_clients_diff.json", "w") as outfile:
+        json.dump(clients_diff, outfile, indent=4)
+
+    clients_mean = dict()
+    for client, stamps in clients_diff.items():
+        clients_mean[client] = sum(stamps) / len(stamps) if len(stamps) > 0 else []
+
+    with open("dumps/log_clients_mean.json", "w") as outfile:
+        json.dump(clients_mean, outfile, indent=4)
+
+    # Average deviation for the request:
+    # [6, 4, 5] => [abs(4-6), abs(5-4)] => [2, 1] => (2+1)/2 => 1.5 average deviation between requests
+
+    clients_deviation = dict()
+    for client, stamps in clients_diff.items():
+        clients_deviation[client] = [
+            abs(stamps[i + 1] - stamps[i]) for i in range(len(stamps) - 1)
+        ]
+
+    for client, stamps in clients_deviation.items():
+        clients_deviation[client] = sum(stamps) / len(stamps) if len(stamps) > 0 else []
+
+    with open("dumps/log_clients_deviation.json", "w") as outfile:
+        json.dump(clients_deviation, outfile, indent=4)
 
 
 if __name__ == "__main__":
-    limit = 1_000_000
-    log = "./access.log"
-
-    # unique = unique_ip(log, limit)
-    # print("Unique IPs for the first {} entries: {}".format(limit, unique))
+    # unique = unique_ip(Defaults.log, Defaults.limit)
+    # print("Unique IPs for the first {} entries: {}".format(Defaults.limit, unique))
     #
-    # multiple_ua = ip_with_multiple_ua(log, limit)
+    # multiple_ua = ip_with_multiple_ua(Defaults.log, Defaults.limit)
     # print(
     #     "Count of IPs with multiple User-Agent for the first {} entries: {}".format(
-    #         limit, multiple_ua
+    #         Defaults.limit, multiple_ua
     #     )
     # )
 
-    parse_interval(log, 30, limit)
+    parse_interval(Defaults.log, 30, Defaults.limit)
+    parse_deviation(Defaults.log, Defaults.limit)
