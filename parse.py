@@ -5,7 +5,7 @@ import time
 
 
 class Defaults:
-    limit = 1_000_000
+    limit = 100_000
     log = "./access.log"
 
 
@@ -27,7 +27,6 @@ def ip_with_multiple_ua(log_name: str, lines=10_000) -> int:
 
             ip = line[: line.find("-") - 1]
             ua = line.split('"')[5]
-            # ua = re.findall(r'([^"]{2,})" "-"?$', line)  # -- faulty
 
             if ip not in ip_to_ua:
                 ip_to_ua[ip] = set()
@@ -126,7 +125,7 @@ def parse_deviation(log_name: str, limit=0) -> None:
 
     clients_mean = dict()
     for client, stamps in clients_diff.items():
-        clients_mean[client] = sum(stamps) / len(stamps) if len(stamps) > 0 else []
+        clients_mean[client] = sum(stamps) / len(stamps) if len(stamps) > 0 else None
 
     with open("dumps/log_clients_mean.json", "w") as outfile:
         json.dump(clients_mean, outfile, indent=4)
@@ -141,7 +140,7 @@ def parse_deviation(log_name: str, limit=0) -> None:
         ]
 
     for client, stamps in clients_deviation.items():
-        clients_deviation[client] = sum(stamps) / len(stamps) if len(stamps) > 0 else []
+        clients_deviation[client] = sum(stamps) / len(stamps) if len(stamps) > 0 else 0
 
     with open("dumps/log_clients_deviation.json", "w") as outfile:
         json.dump(clients_deviation, outfile, indent=4)
