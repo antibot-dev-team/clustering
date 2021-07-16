@@ -1,12 +1,22 @@
+import sklearn
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
-import argparse
-import json
+
 import matplotlib.pyplot as plt
 import numpy as np
 
+import argparse
+import json
+
 
 def clustering(loginterval: str, logdeviation: str) -> None:
+    """
+    Cluster clients using RPI and deviation. Plot result.
+    :param loginterval: JSON of the form {"IP:UA": [amount of requests per intervals]}
+    :param logdeviation: JSON of the form {"IP:UA": int(standard deviation)}
+    :return: None
+    """
+
     with open(loginterval, "r") as interfile:
         data_interval = json.load(interfile)
 
@@ -22,11 +32,12 @@ def clustering(loginterval: str, logdeviation: str) -> None:
         ]
     )
 
-    # value for alg with normalization: eps = 0.5
-    # data = sklearn.preprocessing.StandardScaler().fit_transform(data)
-    db = DBSCAN(eps=100, min_samples=4, metric="euclidean").fit(data)
-    core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
-    core_samples_mask[db.core_sample_indices_] = True
+    # NOTE: value for alg with normalization: eps = 0.5
+    data = sklearn.preprocessing.StandardScaler().fit_transform(data)
+
+    # TODO: try reducing leaf_size for using less RAM
+    db = DBSCAN(eps=0.5, min_samples=4, metric="euclidean").fit(data)
+
     labels = db.labels_
     n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
     n_noise_ = list(labels).count(-1)
@@ -38,6 +49,9 @@ def clustering(loginterval: str, logdeviation: str) -> None:
     # pprint(dict(zip(data_interval.keys(), labels)))
 
     # Draw
+    core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
+    core_samples_mask[db.core_sample_indices_] = True
+
     unique_labels = set(labels)
     colors = [plt.cm.Spectral(each) for each in np.linspace(0, 1, len(unique_labels))]
     for k, col in zip(unique_labels, colors):
@@ -74,14 +88,12 @@ def clustering(loginterval: str, logdeviation: str) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Performs clusterisation using DBSCAN algorithm."
-    )
+    parser = argparse.ArgumentParser(description="Cluster using DBSCAN algorithm.")
     parser.add_argument(
         "--rpi",
         metavar="r",
         type=str,
-        help="JSON with the amount of requests per XX seconds.",
+        help="JSON with the amount of requests per given intervals",
         default="./dumps/log_clients_30s_100k.json",
     )
     parser.add_argument(

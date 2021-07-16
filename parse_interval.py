@@ -5,13 +5,29 @@ import argparse
 
 
 def parse_interval(log_name: str, interval: int, limit=0) -> None:
-    # "ip:user-agent": [reqs per first interval, ... per second, ...]
+    """
+    Create JSON file in ./dumps directory:
+    1) log_clients_{interval duration}s_{lines parsed}.json
+        -- Requests per intervals of given duration.
+        Has a form like: {"IP:UA": [req. per first interval, req. per second interval, ...], ...}
+        If a client did not make any requests in interval, RPI for this interval is not recorded.
+
+    :param log_name: Name of file with logs
+    :param interval: Duration of interval
+    :param limit: Amount of lines to consider
+    :return: None
+    """
+
+    # Will contain: "ip:user-agent": [req. per first interval, req. per second interval, ...],
     clients_rpi = dict()
 
-    # "ip:user-agent": [timestamp1, timestamp2, timestamp3, ...] -- updated on every interval
+    # Will contain: "ip:user-agent": int(amount of requests in interval)
+    # Also will be wiped on every new interval
     clients_reqs = dict()
 
+    # Used to save the time from which the beginning of the interval is counted
     interval_start = None
+
     with open(log_name, "r") as log_file:
         i = 0
         for line in log_file:
@@ -30,7 +46,7 @@ def parse_interval(log_name: str, interval: int, limit=0) -> None:
             client = "{}:{}".format(ip, ua)
             if client not in clients_reqs:
                 clients_reqs[client] = 0
-            clients_reqs[client] += 1
+            clients_reqs[client] += 1  # Register request
 
             if interval_start is None:
                 interval_start = ts
@@ -38,20 +54,23 @@ def parse_interval(log_name: str, interval: int, limit=0) -> None:
 
             if ts - interval_start >= datetime.timedelta(seconds=interval):
                 interval_start = None
+
                 for client in clients_reqs:
+                    rpi = clients_reqs[client] / interval
                     if client not in clients_rpi:
                         clients_rpi[client] = list()
-                    rpi = clients_reqs[client] / interval
                     clients_rpi[client].append(rpi)
-                clients_reqs = dict()  # if 0 rpi records are not needed
-                # for client in clients_reqs:  # comment prev, line and uncomment this if needed
+
+                clients_reqs = dict()
+                # for client in clients_reqs:  # comment prev. line and uncomment this if need to save RPI=0
                 #     clients_reqs[client] = 0
 
+        # Write RPI for the last interval if needed
         if interval_start is not None:
             for client in clients_reqs:
+                rpi = clients_reqs[client] / interval
                 if client not in clients_rpi:
                     clients_rpi[client] = list()
-                rpi = clients_reqs[client] / interval
                 clients_rpi[client].append(rpi)
 
     with open(
