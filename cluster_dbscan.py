@@ -1,9 +1,9 @@
-import sklearn
 from sklearn.cluster import DBSCAN
-import numpy as np
-import json
 from sklearn.preprocessing import StandardScaler
+import argparse
+import json
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def clustering(loginterval: str, logdeviation: str) -> None:
@@ -22,8 +22,9 @@ def clustering(loginterval: str, logdeviation: str) -> None:
         ]
     )
 
-    data = sklearn.preprocessing.StandardScaler().fit_transform(data)
-    db = DBSCAN(eps=0.5, min_samples=len(data) / 1000, metric="euclidean").fit(data)
+    # value for alg with normalization: eps = 0.5
+    # data = sklearn.preprocessing.StandardScaler().fit_transform(data)
+    db = DBSCAN(eps=100, min_samples=4, metric="euclidean").fit(data)
     core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
     core_samples_mask[db.core_sample_indices_] = True
     labels = db.labels_
@@ -36,6 +37,7 @@ def clustering(loginterval: str, logdeviation: str) -> None:
 
     # pprint(dict(zip(data_interval.keys(), labels)))
 
+    # Draw
     unique_labels = set(labels)
     colors = [plt.cm.Spectral(each) for each in np.linspace(0, 1, len(unique_labels))]
     for k, col in zip(unique_labels, colors):
@@ -62,7 +64,7 @@ def clustering(loginterval: str, logdeviation: str) -> None:
             "o",
             markerfacecolor=tuple(col),
             markeredgecolor="k",
-            markersize=6,
+            markersize=4,
         )
 
     plt.xlabel("RPI")
@@ -72,4 +74,23 @@ def clustering(loginterval: str, logdeviation: str) -> None:
 
 
 if __name__ == "__main__":
-    clustering("./dumps/log_clients_3600s_100k.json", "./dumps/log_clients_deviation_100k.json")
+    parser = argparse.ArgumentParser(
+        description="Performs clusterisation using DBSCAN algorithm."
+    )
+    parser.add_argument(
+        "--rpi",
+        metavar="r",
+        type=str,
+        help="JSON with the amount of requests per XX seconds.",
+        default="./dumps/log_clients_30s_100k.json",
+    )
+    parser.add_argument(
+        "--deviation",
+        metavar="d",
+        type=str,
+        help="JSON with the standard deviation for rpi",
+        default="./dumps/log_clients_deviation_100k.json",
+    )
+
+    args = parser.parse_args()
+    clustering(args.rpi, args.deviation)
