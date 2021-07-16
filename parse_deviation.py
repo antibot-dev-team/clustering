@@ -1,0 +1,86 @@
+import datetime
+import re
+import json
+import time
+import argparse
+
+
+def parse_deviation(log_name: str, limit=0) -> None:
+    clients_reqs = dict()
+
+    with open(log_name, "r") as log_file:
+        i = 0
+        for line in log_file:
+            i += 1
+            if limit != 0 and i >= limit:
+                break
+
+            ip = line[: line.find("-") - 1]
+            ua = line.split('"')[5]
+
+            ts = re.findall(r"\[(\d+/\w+/\d+:\d+:\d+:\d+ [+-]?\d+)]", line)
+            ts = datetime.datetime.strptime(
+                ts[0], "%d/%b/%Y:%H:%M:%S %z"
+            )  # e.g. [22/Jan/2019:06:38:40 +0330]
+            ts = time.mktime(ts.timetuple())
+
+            client = "{}:{}".format(ip, ua)
+            if client not in clients_reqs:
+                clients_reqs[client] = list()
+            clients_reqs[client].append(ts)
+
+    # Difference between the requests:
+    # [10, 16, 20, 25] => [16-10, 20-16, 25-20] => [6, 4, 5] => 5 sec. average difference between requests
+
+    # Calculate differences between neighbour timestamps
+    clients_diff = dict()
+    for client, stamps in clients_reqs.items():
+        clients_diff[client] = [
+            abs(stamps[i + 1] - stamps[i]) for i in range(len(stamps) - 1)
+        ]
+
+    with open("dumps/log_clients_diff_{}k.json".format(limit // 1000), "w") as outfile:
+        json.dump(clients_diff, outfile, indent=4)
+
+    clients_mean = dict()
+    for client, stamps in clients_diff.items():
+        clients_mean[client] = sum(stamps) / len(stamps) if len(stamps) > 0 else None
+
+    with open("dumps/log_clients_mean_{}k.json".format(limit // 1000), "w") as outfile:
+        json.dump(clients_mean, outfile, indent=4)
+
+    # Average deviation for the request:
+    # [6, 4, 5] => [abs(4-6), abs(5-4)] => [2, 1] => (2+1)/2 => 1.5 average deviation between requests
+
+    clients_deviation = dict()
+    for client, stamps in clients_diff.items():
+        clients_deviation[client] = [
+            abs(stamps[i + 1] - stamps[i]) for i in range(len(stamps) - 1)
+        ]
+
+    for client, stamps in clients_deviation.items():
+        clients_deviation[client] = sum(stamps) / len(stamps) if len(stamps) > 0 else 0
+
+    with open(
+        "dumps/log_clients_deviation_{}k.json".format(limit // 1000), "w"
+    ) as outfile:
+        json.dump(clients_deviation, outfile, indent=4)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Calculate requests per interval and dump to json file."
+    )
+    parser.add_argument(
+        "--log", metavar="f", type=str, help="Log file", default="./access.log"
+    )
+    parser.add_argument(
+        "--limit",
+        metavar="l",
+        type=int,
+        help="Parse specified amount of lines.",
+        default=500_000,
+    )
+    args = parser.parse_args()
+
+    parse_deviation(args.log, args.limit)

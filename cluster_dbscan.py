@@ -34,6 +34,8 @@ def clustering(loginterval: str, logdeviation: str) -> None:
     print("Estimated number of noise points: %d" % n_noise_)
     print("Estimated number of points: %d" % len(data))
 
+    # pprint(dict(zip(data_interval.keys(), labels)))
+
     unique_labels = set(labels)
     colors = [plt.cm.Spectral(each) for each in np.linspace(0, 1, len(unique_labels))]
     for k, col in zip(unique_labels, colors):
@@ -50,7 +52,7 @@ def clustering(loginterval: str, logdeviation: str) -> None:
             "o",
             markerfacecolor=tuple(col),
             markeredgecolor="k",
-            markersize=12,
+            markersize=4,
         )
 
         xy = data[class_member_mask & ~core_samples_mask]
