@@ -61,9 +61,7 @@ def parse_interval(log_name: str, interval: int, limit=0) -> None:
             client = "{}:{}".format(ip, ua)
             if client not in clients_reqs:
                 clients_reqs[client] = 0
-                # clients_reqs[client] = list()
             clients_reqs[client] += 1
-            # clients_reqs[client].append(ts)
 
             if interval_start is None:
                 interval_start = ts
@@ -75,14 +73,19 @@ def parse_interval(log_name: str, interval: int, limit=0) -> None:
                     if client not in clients_rpi:
                         clients_rpi[client] = list()
                     rpi = clients_reqs[client] / interval
-                    # rpi = len(clients_reqs[client] / interval
                     clients_rpi[client].append(rpi)
-
                 clients_reqs = dict()  # if 0 rpi records are not needed
                 # for client in clients_reqs:  # comment prev, line and uncomment this if needed
                 #     clients_reqs[client] = 0
 
-    with open("./dumps/log_clients_{}s.json".format(interval), "w") as outfile:
+        if interval_start is not None:
+            for client in clients_reqs:
+                if client not in clients_rpi:
+                    clients_rpi[client] = list()
+                rpi = clients_reqs[client] / interval
+                clients_rpi[client].append(rpi)
+
+    with open("./dumps/log_clients_{}s_{}k.json".format(interval, limit // 1000), "w") as outfile:
         json.dump(clients_rpi, outfile, indent=4)
 
 
@@ -120,14 +123,14 @@ def parse_deviation(log_name: str, limit=0) -> None:
             abs(stamps[i + 1] - stamps[i]) for i in range(len(stamps) - 1)
         ]
 
-    with open("dumps/log_clients_diff.json", "w") as outfile:
+    with open("dumps/log_clients_diff_{}k.json".format(limit // 1000), "w") as outfile:
         json.dump(clients_diff, outfile, indent=4)
 
     clients_mean = dict()
     for client, stamps in clients_diff.items():
         clients_mean[client] = sum(stamps) / len(stamps) if len(stamps) > 0 else None
 
-    with open("dumps/log_clients_mean.json", "w") as outfile:
+    with open("dumps/log_clients_mean_{}k.json".format(limit // 1000), "w") as outfile:
         json.dump(clients_mean, outfile, indent=4)
 
     # Average deviation for the request:
@@ -142,7 +145,7 @@ def parse_deviation(log_name: str, limit=0) -> None:
     for client, stamps in clients_deviation.items():
         clients_deviation[client] = sum(stamps) / len(stamps) if len(stamps) > 0 else 0
 
-    with open("dumps/log_clients_deviation.json", "w") as outfile:
+    with open("dumps/log_clients_deviation_{}k.json".format(limit // 1000), "w") as outfile:
         json.dump(clients_deviation, outfile, indent=4)
 
 
@@ -158,4 +161,5 @@ if __name__ == "__main__":
     # )
 
     parse_interval(Defaults.log, 30, Defaults.limit)
-    parse_deviation(Defaults.log, Defaults.limit)
+    parse_interval(Defaults.log, 3600, Defaults.limit)
+    # parse_deviation(Defaults.log, Defaults.limit)

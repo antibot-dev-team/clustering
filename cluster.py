@@ -70,4 +70,4 @@ def clustering(loginterval: str, logdeviation: str) -> None:
 
 
 if __name__ == "__main__":
-    clustering("./dumps/log_clients_30s.json", "./dumps/log_clients_deviation.json")
+    clustering("./dumps/log_clients_3600s_100k.json", "./dumps/log_clients_deviation_100k.json")
