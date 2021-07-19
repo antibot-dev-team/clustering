@@ -35,7 +35,6 @@ def clustering(loginterval: str, logdeviation: str) -> None:
     # NOTE: value for alg with normalization: eps = 0.5
     data = sklearn.preprocessing.StandardScaler().fit_transform(data)
 
-    # TODO: try reducing leaf_size for using less RAM
     db = DBSCAN(eps=0.5, min_samples=4, metric="euclidean").fit(data)
 
     labels = db.labels_

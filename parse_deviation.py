@@ -57,7 +57,6 @@ def parse_deviation(log_name: str, limit=0) -> None:
             abs(stamps[i + 1] - stamps[i]) for i in range(len(stamps) - 1)
         ]
 
-    # TODO: fix naming when limit = 0
     with open("dumps/log_clients_diff_{}k.json".format(limit // 1000), "w") as outfile:
         json.dump(clients_diff, outfile, indent=4)
 
@@ -67,9 +66,6 @@ def parse_deviation(log_name: str, limit=0) -> None:
 
     with open("dumps/log_clients_mean_{}k.json".format(limit // 1000), "w") as outfile:
         json.dump(clients_mean, outfile, indent=4)
-
-    # Mean deviation for the request:
-    # [6, 4, 5] => [abs(4-6), abs(5-4)] => [2, 1] => (2+1)/2 => 1.5 mean deviation
 
     # Calculate mean deviation
     clients_deviation = dict()
