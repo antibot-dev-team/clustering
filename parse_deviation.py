@@ -3,6 +3,9 @@ import argparse
 import re
 import json
 import time
+import math
+
+import numpy as np
 
 
 def parse_deviation(log_name: str, limit=0) -> None:
@@ -72,11 +75,13 @@ def parse_deviation(log_name: str, limit=0) -> None:
     clients_deviation = dict()
     for client, stamps in clients_diff.items():
         clients_deviation[client] = [
-            abs(stamps[i + 1] - stamps[i]) for i in range(len(stamps) - 1)
+            np.power(stamps[i] - clients_mean[client], 2) for i in range(len(stamps))
         ]
 
     for client, stamps in clients_deviation.items():
-        clients_deviation[client] = sum(stamps) / len(stamps) if len(stamps) > 0 else 0
+        clients_deviation[client] = (
+            math.sqrt(sum(stamps) / (len(stamps) - 1)) if len(stamps) - 1 > 0 else 0
+        )
 
     with open(
         "dumps/log_clients_deviation_{}k.json".format(limit // 1000), "w"
