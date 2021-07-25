@@ -93,8 +93,8 @@ def parse_deviation(log_name: str, limit=0) -> None:
     df_mean = dict_to_df(clients_mean, "Mean")
     df_deviation = dict_to_df(clients_deviation, "Deviation")
 
-    df = pd.merge(df_diff, df_mean, on=["IP", "UA"])
-    df = df.merge(df_deviation, on=["IP", "UA"])
+    df = pd.merge(df_diff, df_mean, on=["IP", "UA", "Session"])
+    df = df.merge(df_deviation, on=["IP", "UA", "Session"])
 
     if os.path.isfile("./dumps/requests.csv"):
         df_old = pd.read_csv("./dumps/requests.csv")
@@ -106,7 +106,7 @@ def parse_deviation(log_name: str, limit=0) -> None:
 
         if "Deviation" in df_old.columns:
             df_old = df_old.drop("Deviation", axis=1)
-        df = df.merge(df_old, on=["IP", "UA"])
+        df = df.merge(df_old, on=["IP", "UA", "Session"])
 
     df.to_csv("./dumps/requests.csv", index=False)
 
@@ -114,23 +114,21 @@ def parse_deviation(log_name: str, limit=0) -> None:
 def dict_to_df(dictionary: dict, col_name: str) -> pd.DataFrame:
     """
     Create pd.DataFrame from python dict
-    :param dictionary: Should have form {"IP:UA": value}
+    :param dictionary: Should have form {"IP:UA": list}
     :param col_name: Name for DataFrame column with values from dict
     :return: pd.DataFrame with 3 columns: IP, UA, col_name
     """
 
-    ip = []
-    ua = []
-    for key in dictionary.keys():
-        ip_ua = key.split(":")
-        ip.append(ip_ua[0])
-        ua.append(ip_ua[1])
+    frame = defaultdict(list)
+    for client, sessions in dictionary.items():
+        ip_ua = client.split(":")
+        for i in range(len(sessions)):
+            frame["IP"].append(ip_ua[0])
+            frame["UA"].append(ip_ua[1])
+            frame["Session"].append(i + 1)
+            frame[col_name].append(sessions[i])
 
-    return pd.DataFrame({
-            "IP": ip,
-            "UA": ua,
-            col_name: dictionary.values()
-    })
+    return pd.DataFrame(frame)
 
 
 if __name__ == "__main__":

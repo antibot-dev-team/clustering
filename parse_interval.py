@@ -24,9 +24,7 @@ def parse_interval(log_name: str, interval: int, limit=0) -> None:
 
     with open(log_name, "r") as log_file:
         i = 0
-        for (
-            line
-        ) in log_file:  # Parse to dict: IP/UA : [[session_1], [session_2], ...]
+        for line in log_file:  # Parse to dict: IP/UA : [[session_1], [session_2], ...]
             i += 1
             if limit != 0 and i >= limit:
                 break
@@ -61,9 +59,7 @@ def parse_interval(log_name: str, interval: int, limit=0) -> None:
         for (
             client,
             requests,
-        ) in (
-            clients_reqs.items()
-        ):  # Calculate RPI per each interval
+        ) in clients_reqs.items():  # Calculate RPI per each interval
             request_speed = []
             for session in requests:
                 session_speed = []
@@ -76,11 +72,7 @@ def parse_interval(log_name: str, interval: int, limit=0) -> None:
                         interval_reqs = 0
                     interval_reqs += 1
                     if ts is session[-1]:
-                        session_speed.append(
-                            interval_reqs / (ts - start_ts)
-                            if ts - start_ts > 0
-                            else interval_reqs
-                        )
+                        session_speed.append(interval_reqs / interval)
                 request_speed.append(session_speed)
             clients_reqs[client] = request_speed
 
@@ -92,19 +84,22 @@ def parse_interval(log_name: str, interval: int, limit=0) -> None:
         ip.append(ip_ua[0])
         ua.append(ip_ua[1])
 
-    df = pd.DataFrame(
-        {
-            "IP": ip,
-            "UA": ua,
-            f"RPI{interval}": clients_reqs.values()
-        }
-    )
+    frame = defaultdict(list)
+    for client, sessions in clients_reqs.items():
+        ip_ua = client.split(":")
+        for i in range(len(sessions)):
+            frame["IP"].append(ip_ua[0])
+            frame["UA"].append(ip_ua[1])
+            frame["Session"].append(i + 1)
+            frame[f"RPI{interval}"].append(sessions[i])
+
+    df = pd.DataFrame(frame)
 
     if os.path.isfile("./dumps/requests.csv"):
         df_old = pd.read_csv("./dumps/requests.csv")
         if f"RPI{interval}" in df_old.columns:
             df_old = df_old.drop(f"RPI{interval}", axis=1)
-        df = df.merge(df_old, on=["IP", "UA"])
+        df = df.merge(df_old, on=["IP", "UA", "Session"])
 
     df.to_csv("./dumps/requests.csv", index=False)
 

@@ -18,19 +18,18 @@ def clustering(csv_file: str) -> None:
     """
 
     # TODO: don't hardcode interval length
-    requests = pd.read_csv(csv_file, converters={"RPI30": ast.literal_eval,
-                                                 "Deviation": ast.literal_eval,
-                                                 "Diff": ast.literal_eval})
-
-    requests = requests[requests["Deviation"].map(lambda x: x[0] is not None)]
-
-    deviations = [deviation[0] for deviation in requests["Deviation"].tolist()]
-    rpis = [rpi[0][0] for rpi in requests["RPI30"].tolist()]
-
-    data = np.array([
-        [rpi, deviation]
-        for rpi, deviation in zip(rpis, deviations)]
+    requests = pd.read_csv(
+        csv_file,
+        dtype={"Deviation": np.float64},
+        converters={"RPI30": ast.literal_eval},
     )
+
+    requests = requests.dropna()
+
+    deviations = requests["Deviation"]
+    rpis = [rpi[0] for rpi in requests["RPI30"]]
+
+    data = np.array([[rpi, deviation] for rpi, deviation in zip(rpis, deviations)])
 
     # NOTE: value for alg with normalization: eps = 0.5
     # data = sklearn.preprocessing.StandardScaler().fit_transform(data)
@@ -45,7 +44,7 @@ def clustering(csv_file: str) -> None:
     print("Estimated number of noise points: %d" % n_noise_)
     print("Estimated number of points: %d" % len(data))
 
-    requests = requests[["IP", "UA"]]
+    requests = requests[["IP", "UA", "Session"]]
     requests["Label"] = labels
     requests["RPI30"] = rpis
     requests["Deviation"] = deviations
