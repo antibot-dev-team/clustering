@@ -20,7 +20,7 @@ def clustering(csv_file: str, int_len: int, min_req: int) -> None:
     requests = pd.read_csv(
         csv_file,
         dtype={"Deviation": np.float64},
-        converters={f"RPI{int_len}": ast.literal_eval},
+        converters={f"RPI{int_len}": ast.literal_eval}
     )
 
     # Remove rows with None values

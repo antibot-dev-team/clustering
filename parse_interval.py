@@ -49,47 +49,43 @@ def parse_interval(log_name: str, interval: int, limit=0) -> None:
 
             client_session_reqs[client].append(ts)
 
-        for (
-            client,
-            ts,
-        ) in client_session_reqs.items():  # Append last session to the dict
-            if len(client_session_reqs) > 0:
-                clients_reqs[client].append(client_session_reqs[client])
+    for (
+        client,
+        ts,
+    ) in client_session_reqs.items():  # Append last session to the dict
+        if len(client_session_reqs) > 0:
+            clients_reqs[client].append(client_session_reqs[client])
 
-        for (
-            client,
-            requests,
-        ) in clients_reqs.items():  # Calculate RPI per each interval
-            request_speed = []
-            for session in requests:
-                session_speed = []
-                start_ts = session[0]
-                interval_reqs = 0
-                for ts in session:
-                    if ts - start_ts >= interval:
-                        session_speed.append(interval_reqs / interval)
-                        start_ts = ts
-                        interval_reqs = 0
-                    interval_reqs += 1
-                    if ts is session[-1]:
-                        session_speed.append(interval_reqs / interval)
-                request_speed.append(session_speed)
-            clients_reqs[client] = request_speed
+    for (
+        client,
+        requests,
+    ) in clients_reqs.items():  # Calculate RPI per each interval
+        request_speed = []
+        for session in requests:
+            session_speed = []
+            start_ts = session[0]
+            interval_reqs = 0
+            for ts in session:
+                if ts - start_ts >= interval:
+                    session_speed.append(interval_reqs / interval)
+                    start_ts = ts
+                    interval_reqs = 0
+                interval_reqs += 1
+                if ts is session[-1]:
+                    session_speed.append(interval_reqs / interval)
+            request_speed.append(session_speed)
+        clients_reqs[client] = request_speed
 
     # Write to csv
-    ip = []
-    ua = []
-    for key in clients_reqs.keys():
-        ip_ua = key.split(":")
-        ip.append(ip_ua[0])
-        ua.append(ip_ua[1])
-
     frame = defaultdict(list)
     for client, sessions in clients_reqs.items():
-        ip_ua = client.split(":")
+        delim_idx = client.find(":")  # 🤡
+        ip = client[:delim_idx]
+        ua = client[delim_idx + 1:]
+
         for i in range(len(sessions)):
-            frame["IP"].append(ip_ua[0])
-            frame["UA"].append(ip_ua[1])
+            frame["IP"].append(ip)
+            frame["UA"].append(ua)
             frame["Session"].append(i + 1)
             frame[f"RPI{interval}"].append(sessions[i])
 

@@ -47,44 +47,57 @@ def parse_deviation(log_name: str, limit=0) -> None:
 
     # Calculate differences between neighbour timestamps
     clients_diff = defaultdict(list)
-    for client, req_time in clients_reqs.items():
-        session_req = []
-        for i in range(len(req_time) - 1):
-            diff = req_time[i + 1] - req_time[i]
-            if diff < 60 * 30:  # 30 minutes difference
-                session_req.append(diff)
+    for client, timestamps in clients_reqs.items():
+        sessions_centred_diffs = []
+        for i in range(len(timestamps) - 1):
+            diff = timestamps[i + 1] - timestamps[i]
+            if diff < 60 * 30:  # less than 30 minutes difference
+                sessions_centred_diffs.append(diff)
             else:
-                clients_diff[client].append(session_req)
-                session_req.clear()
-        if len(session_req) > 0:
-            clients_diff[client].append(session_req)
+                clients_diff[client].append(sessions_centred_diffs if len(sessions_centred_diffs) > 0 else None)
+                sessions_centred_diffs = []
+
+        if len(sessions_centred_diffs) > 0:  # all timestamps was read but session is not finished
+            clients_diff[client].append(sessions_centred_diffs)
+        elif len(timestamps) == 1:  # only one timestamp (diff can't be calculated for this session)
+            clients_diff[client].append(None)
 
     # Calculate mean of differences
     clients_mean = defaultdict(list)
     for client in clients_diff:
         for session in clients_diff[client]:
-            clients_mean[client].append(
-                sum(session) / len(session) if len(session) > 0 else None
-            )
+            if session is not None:
+                if len(session) == 0:
+                    print(f"{client}, {session}, {clients_diff[client]}")
+                clients_mean[client].append(sum(session) / len(session))
+            else:
+                clients_mean[client].append(None)
 
     # Calculate mean deviation
     clients_deviation = defaultdict(list)
-    for client, sessions in clients_diff.items():
-        for session_numb in range(len(sessions)):
+    for client, sessions_diffs in clients_diff.items():
+        for i in range(len(sessions_diffs)):
+            if sessions_diffs[i] is None:
+                clients_deviation[client].append(None)
+                continue
+
             session_deviation = []
-            for timestamp in sessions[session_numb]:
+            for diff in sessions_diffs[i]:
                 session_deviation.append(
-                    (timestamp - clients_mean[client][session_numb]) ** 2
+                    (diff - clients_mean[client][i]) ** 2
                 )
             clients_deviation[client].append(session_deviation)
 
-    for client, sessions in clients_deviation.items():
-        for session_numb in range(len(sessions)):
-            sessions[session_numb] = (
+    for client, sessions_diffs in clients_deviation.items():
+        for i in range(len(sessions_diffs)):
+            if sessions_diffs[i] is None:
+                continue
+
+            sessions_diffs[i] = (
                 math.sqrt(
-                    sum(sessions[session_numb]) / (len(sessions[session_numb]) - 1)
+                    sum(sessions_diffs[i]) / (len(sessions_diffs[i]) - 1)
                 )
-                if len(sessions[session_numb]) - 1 > 0
+                if len(sessions_diffs[i]) - 1 > 0
                 else None
             )
 
@@ -114,6 +127,7 @@ def parse_deviation(log_name: str, limit=0) -> None:
 def dict_to_df(dictionary: dict, col_name: str) -> pd.DataFrame:
     """
     Create pd.DataFrame from python dict
+
     :param dictionary: Should have form {"IP:UA": list}
     :param col_name: Name for DataFrame column with values from dict
     :return: pd.DataFrame with 3 columns: IP, UA, col_name
@@ -121,10 +135,13 @@ def dict_to_df(dictionary: dict, col_name: str) -> pd.DataFrame:
 
     frame = defaultdict(list)
     for client, sessions in dictionary.items():
-        ip_ua = client.split(":")
+        delim_idx = client.find(":")  # 🤡
+        ip = client[:delim_idx]
+        ua = client[delim_idx + 1:]
+
         for i in range(len(sessions)):
-            frame["IP"].append(ip_ua[0])
-            frame["UA"].append(ip_ua[1])
+            frame["IP"].append(ip)
+            frame["UA"].append(ua)
             frame["Session"].append(i + 1)
             frame[col_name].append(sessions[i])
 
