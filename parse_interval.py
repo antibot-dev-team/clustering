@@ -1,19 +1,17 @@
 import re
 import datetime
 import time
-import json
-from collections import defaultdict
-from time import mktime
+import os
 import argparse
+
+import pandas as pd
+
+from collections import defaultdict
 
 
 def parse_interval(log_name: str, interval: int, limit=0) -> None:
     """
-    Create JSON file in ./dumps directory:
-    1) log_clients_{interval duration}s_{lines parsed}.json
-        -- Requests per intervals of given duration.
-        Has a form like: {"IP:UA": [req. per first interval, req. per second interval, ...], ...}
-        If a client did not make any requests in interval, RPI for this interval is not recorded.
+    Create or append requests per interval to ./dumps/requests.csv file
 
     :param log_name: Name of file with logs
     :param interval: Duration of interval
@@ -26,7 +24,9 @@ def parse_interval(log_name: str, interval: int, limit=0) -> None:
 
     with open(log_name, "r") as log_file:
         i = 0
-        for line in log_file:           # парсим в словарь: IP/UA : [[session_1], [session_2], ...]
+        for (
+            line
+        ) in log_file:  # Parse to dict: IP/UA : [[session_1], [session_2], ...]
             i += 1
             if limit != 0 and i >= limit:
                 break
@@ -42,17 +42,28 @@ def parse_interval(log_name: str, interval: int, limit=0) -> None:
 
             client = "{}:{}".format(ip, ua)
 
-            if len(client_session_reqs[client]) > 0 and ts - client_session_reqs[client][-1] > 30 * 60:
+            if (
+                len(client_session_reqs[client]) > 0
+                and ts - client_session_reqs[client][-1] > 30 * 60
+            ):
                 clients_reqs[client].append(client_session_reqs[client])
                 client_session_reqs[client].clear()
 
             client_session_reqs[client].append(ts)
 
-        for client, ts in client_session_reqs.items():    # заносим в словарь последнюю сессию
+        for (
+            client,
+            ts,
+        ) in client_session_reqs.items():  # Append last session to the dict
             if len(client_session_reqs) > 0:
                 clients_reqs[client].append(client_session_reqs[client])
 
-        for client, requests in clients_reqs.items():  # изменяем содержимое session_i: ts -> средняя скорость запросов за 30с
+        for (
+            client,
+            requests,
+        ) in (
+            clients_reqs.items()
+        ):  # Calculate RPI per each interval
             request_speed = []
             for session in requests:
                 session_speed = []
@@ -65,19 +76,42 @@ def parse_interval(log_name: str, interval: int, limit=0) -> None:
                         interval_reqs = 0
                     interval_reqs += 1
                     if ts is session[-1]:
-                        session_speed.append(interval_reqs / (ts - start_ts) if ts - start_ts > 0 else interval_reqs)
+                        session_speed.append(
+                            interval_reqs / (ts - start_ts)
+                            if ts - start_ts > 0
+                            else interval_reqs
+                        )
                 request_speed.append(session_speed)
             clients_reqs[client] = request_speed
 
-    with open(
-        "./dumps/log_clients_{}s_{}k.json".format(interval, limit // 1000), "w"
-    ) as outfile:
-        json.dump(clients_reqs, outfile, indent=4)
+    # Write to csv
+    ip = []
+    ua = []
+    for key in clients_reqs.keys():
+        ip_ua = key.split(":")
+        ip.append(ip_ua[0])
+        ua.append(ip_ua[1])
+
+    df = pd.DataFrame(
+        {
+            "IP": ip,
+            "UA": ua,
+            f"RPI{interval}": clients_reqs.values()
+        }
+    )
+
+    if os.path.isfile("./dumps/requests.csv"):
+        df_old = pd.read_csv("./dumps/requests.csv")
+        if f"RPI{interval}" in df_old.columns:
+            df_old = df_old.drop(f"RPI{interval}", axis=1)
+        df = df.merge(df_old, on=["IP", "UA"])
+
+    df.to_csv("./dumps/requests.csv", index=False)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Calculate requests per interval and dump to json file."
+        description="Calculate requests per interval and dump to csv file."
     )
     parser.add_argument(
         "--interval",
