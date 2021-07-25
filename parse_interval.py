@@ -1,6 +1,9 @@
 import re
 import datetime
+import time
 import json
+from collections import defaultdict
+from time import mktime
 import argparse
 
 
@@ -18,65 +21,58 @@ def parse_interval(log_name: str, interval: int, limit=0) -> None:
     :return: None
     """
 
-    # Will contain: "ip:user-agent": [req. per first interval, req. per second interval, ...],
-    clients_rpi = dict()
-
-    # Will contain: "ip:user-agent": int(amount of requests in interval)
-    # Also will be wiped on every new interval
-    clients_reqs = dict()
-
-    # Used to save the time from which the beginning of the interval is counted
-    interval_start = None
+    clients_reqs = defaultdict(list)
+    client_session_reqs = defaultdict(list)
 
     with open(log_name, "r") as log_file:
         i = 0
-        for line in log_file:
+        for line in log_file:           # парсим в словарь: IP/UA : [[session_1], [session_2], ...]
             i += 1
             if limit != 0 and i >= limit:
                 break
 
             ip = line[: line.find("-") - 1]
-            ua = line.split('"')[5]
+            ua = line.split('"')[5]  # User-Agent goes after 5-th \"
 
             ts = re.findall(r"\[(\d+/\w+/\d+:\d+:\d+:\d+ [+-]?\d+)]", line)
             ts = datetime.datetime.strptime(
                 ts[0], "%d/%b/%Y:%H:%M:%S %z"
             )  # e.g. [22/Jan/2019:06:38:40 +0330]
+            ts = time.mktime(ts.timetuple())
 
             client = "{}:{}".format(ip, ua)
-            if client not in clients_reqs:
-                clients_reqs[client] = 0
-            clients_reqs[client] += 1  # Register request
 
-            if interval_start is None:
-                interval_start = ts
-                continue
+            if len(client_session_reqs[client]) > 0 and ts - client_session_reqs[client][-1] > 30 * 60:
+                clients_reqs[client].append(client_session_reqs[client])
+                client_session_reqs[client].clear()
 
-            if ts - interval_start >= datetime.timedelta(seconds=interval):
-                interval_start = None
+            client_session_reqs[client].append(ts)
 
-                for client in clients_reqs:
-                    rpi = clients_reqs[client] / interval
-                    if client not in clients_rpi:
-                        clients_rpi[client] = list()
-                    clients_rpi[client].append(rpi)
+        for client, ts in client_session_reqs.items():    # заносим в словарь последнюю сессию
+            if len(client_session_reqs) > 0:
+                clients_reqs[client].append(client_session_reqs[client])
 
-                clients_reqs = dict()
-                # for client in clients_reqs:  # comment prev. line and uncomment this if need to save RPI=0
-                #     clients_reqs[client] = 0
-
-        # Write RPI for the last interval if needed
-        if interval_start is not None:
-            for client in clients_reqs:
-                rpi = clients_reqs[client] / interval
-                if client not in clients_rpi:
-                    clients_rpi[client] = list()
-                clients_rpi[client].append(rpi)
+        for client, requests in clients_reqs.items():  # изменяем содержимое session_i: ts -> средняя скорость запросов за 30с
+            request_speed = []
+            for session in requests:
+                session_speed = []
+                start_ts = session[0]
+                interval_reqs = 0
+                for ts in session:
+                    if ts - start_ts >= interval:
+                        session_speed.append(interval_reqs / interval)
+                        start_ts = ts
+                        interval_reqs = 0
+                    interval_reqs += 1
+                    if ts is session[-1]:
+                        session_speed.append(interval_reqs / (ts - start_ts) if ts - start_ts > 0 else interval_reqs)
+                request_speed.append(session_speed)
+            clients_reqs[client] = request_speed
 
     with open(
         "./dumps/log_clients_{}s_{}k.json".format(interval, limit // 1000), "w"
     ) as outfile:
-        json.dump(clients_rpi, outfile, indent=4)
+        json.dump(clients_reqs, outfile, indent=4)
 
 
 if __name__ == "__main__":
@@ -98,7 +94,7 @@ if __name__ == "__main__":
         metavar="l",
         type=int,
         help="Parse specified amount of lines.",
-        default=500_000,
+        default=100_000,
     )
     args = parser.parse_args()
 
