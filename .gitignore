@@ -1,3 +1,5 @@
+.idea/
+
 access.log
 dumps/*.json
 
