@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 
-def clustering(csv_file: str, int_len: int, min_req: int) -> None:
+def clustering(csv_file: str, eps: int, min_samples:int, int_len: int, min_req: int) -> None:
     """
     Cluster clients using RPI and deviation. Plot result.
     :param int_len: Length of interval in RPI
@@ -34,7 +34,7 @@ def clustering(csv_file: str, int_len: int, min_req: int) -> None:
     data = np.array([[rpi, deviation] for rpi, deviation in zip(rpis, deviations)])
 
     # data = sklearn.preprocessing.StandardScaler().fit_transform(data)
-    db = DBSCAN(eps=10, min_samples=4, metric="euclidean").fit(data)
+    db = DBSCAN(eps=eps, min_samples=min_samples, metric="euclidean").fit(data)
 
     labels = db.labels_
     n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
@@ -110,11 +110,27 @@ if __name__ == "__main__":
     parser.add_argument(
         "--min-req",
         dest="min_req",
-        metavar="m",
+        metavar="mr",
         type=int,
         help="Minimal amount of requests done by client in one session to be considered for clustering",
         default=5,
     )
+    parser.add_argument(
+        "--eps",
+        dest="e",
+        metavar="e",
+        type=int,
+        help="Epsilon parameter for dbscan",
+        default=5,
+    )
+    parser.add_argument(
+        "--min-samples",
+        dest="min_samples",
+        metavar="ms",
+        type=int,
+        help="Min samples parameter for dbscan",
+        default=6,
+    )
 
     args = parser.parse_args()
-    clustering(args.input, args.int_len, args.min_req)
+    clustering(args.input, args.e, args.min_samples, args.int_len, args.min_req)
