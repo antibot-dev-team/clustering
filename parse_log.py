@@ -40,7 +40,7 @@ def parse_deviation(log_name: str, interval: int, limit=0) -> None:
             ts = datetime.datetime.strptime(
                 ts[0], "%d/%b/%Y:%H:%M:%S %z"
             )  # e.g. [22/Jan/2019:06:38:40 +0330]
-            ts = ts.timestamp()
+            ts = int(ts.timestamp())
 
             client = "{}:{}".format(ip, ua)
             if (
