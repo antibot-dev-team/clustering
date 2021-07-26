@@ -11,7 +11,7 @@ import pandas as pd
 
 def parse_deviation(log_name: str, interval: int, limit=0) -> None:
     """
-    Create or append columns to ./dumps/requests.csv file:
+    Create ./dumps/requests.csv file with:
     1) Time difference between requests in each session
     2) Mean value of the differences between requests in each session
     3) Mean deviation of time difference between requests in each session
@@ -140,21 +140,6 @@ def parse_deviation(log_name: str, interval: int, limit=0) -> None:
     df = pd.merge(df_rpi, df_diff, on=["IP", "UA", "Session"])
     df = df.merge(df_mean, on=["IP", "UA", "Session"])
     df = df.merge(df_deviation, on=["IP", "UA", "Session"])
-
-    if os.path.isfile("./dumps/requests.csv"):
-        df_old = pd.read_csv("./dumps/requests.csv")
-        if "Diff" in df_old.columns:
-            df_old = df_old.drop("Diff", axis=1)
-
-        if f"RPI{interval}" in df_old.columns:
-            df_old = df_old.drop(f"RPI{interval}", axis=1)
-
-        if "Mean" in df_old.columns:
-            df_old = df_old.drop("Mean", axis=1)
-
-        if "Deviation" in df_old.columns:
-            df_old = df_old.drop("Deviation", axis=1)
-        df = df.merge(df_old, on=["IP", "UA", "Session"])
 
     df.to_csv("./dumps/requests.csv", index=False)
 
