@@ -8,9 +8,12 @@ import numpy as np
 import pandas as pd
 
 
-def clustering(csv_file: str, eps: int, min_samples:int, int_len: int, min_req: int) -> None:
+def clustering(csv_file: str, eps: int, min_samples: int, int_len: int, min_req: int) -> None:
     """
     Cluster clients using RPI and deviation. Plot result.
+
+    :param min_samples: Minimal samples parameter for DBSCAN
+    :param eps: Epsilon parameter for DBSCAN
     :param int_len: Length of interval in RPI
     :param min_req: Minimal amount of request done by client to be considered for clustering
     :param csv_file: CSV file containing RPI and Deviation columns
