@@ -1,8 +1,10 @@
-from numpy import array
 import argparse
 import ast
 
+import sklearn
+from numpy import array
 from sklearn.cluster import DBSCAN
+from sklearn.cluster import KMeans
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,14 +12,27 @@ import pandas as pd
 
 
 def two_dim_clustering(
-    csv_file: str, usg_data: str, int_len: int, min_req: int, eps: int, min_samples: int
+    csv_file: str,
+    algorithm: str,
+    usg_data: str,
+    int_len: int,
+    min_req: int,
+    eps: int,
+    min_samples: int,
+    n_clusters: int,
 ) -> None:
+
     """
     Two-dimensional cluster clients using RPI and deviation or mean. Plot result.
+
     :param csv_file: CSV file containing RPI and Deviation columns
+    :param algorithm: The algorithm for clustering. Available: dbscan, kmeans
     :param usg_data: Data for clustering. Available: Deviation, Mean
     :param int_len: Length of interval in RPI
     :param min_req: Minimal amount of request done by client to be considered for clustering
+    :param eps: Epsilon parameter for DBSCAN
+    :param min_samples: Minimal samples parameter for DBSCAN
+    :param n_clusters: Number of clusters for kmeans
     :return: None
     """
 
@@ -34,12 +49,17 @@ def two_dim_clustering(
     requests = requests[requests["Diff"].apply(lambda x: len(x) + 1 >= min_req)]
 
     second_param = requests[f"{usg_data}"]
+
     rpis = [rpi[0] for rpi in requests[f"RPI{int_len}"]]
     data = np.array([[rpi, deviation] for rpi, deviation in zip(rpis, second_param)])
 
+    # TODO normalization
     # data = sklearn.preprocessing.StandardScaler().fit_transform(data)
-    db = DBSCAN(eps=eps, min_samples=min_samples, metric="euclidean").fit(data)
-
+    db = (
+        KMeans(n_clusters=n_clusters, random_state=0).fit(data)
+        if algorithm == "kmeans"
+        else DBSCAN(eps=eps, min_samples=min_samples, metric="euclidean").fit(data)
+    )
     labels = db.labels_
     n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
     n_noise_ = list(labels).count(-1)
@@ -54,7 +74,7 @@ def two_dim_clustering(
     requests["Label"] = labels
     requests[f"RPI{int_len}"] = rpis
     requests[f"{usg_data}"] = second_param
-    requests.to_csv("./dumps/2d_labeling.csv", index=False)
+    requests.to_csv(f"./dumps/2d_{algorithm}_labeling.csv", index=False)
 
     # Dump top-100 interesting clients
     sort = requests.sort_values(by=f"RPI{int_len}", ascending=False)
@@ -65,7 +85,7 @@ def two_dim_clustering(
 
     # Draw
     core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
-    core_samples_mask[db.core_sample_indices_] = True
+    # core_samples_mask[db.core_sample_indices_] = True
 
     unique_labels = set(labels)
     colors = [plt.cm.Spectral(each) for each in np.linspace(0, 1, len(unique_labels))]
@@ -84,6 +104,7 @@ def two_dim_clustering(
             markerfacecolor=tuple(col),
             markeredgecolor="k",
             markersize=8,
+            alpha=0.2,
         )
 
         xy = data[class_member_mask & ~core_samples_mask]
@@ -94,6 +115,7 @@ def two_dim_clustering(
             markerfacecolor=tuple(col),
             markeredgecolor="k",
             markersize=6,
+            alpha=0.2,
         )
 
     plt.xlabel(f"RPI{int_len}")
@@ -103,14 +125,27 @@ def two_dim_clustering(
 
 
 def one_dim_clustering(
-    csv_file: str, usg_data: str, int_len: int, min_req: int, eps: int, min_samples: int
+    csv_file: str,
+    algorithm: str,
+    usg_data: str,
+    int_len: int,
+    min_req: int,
+    eps: int,
+    min_samples: int,
+    n_clusters: int,
 ) -> None:
+
     """
     One-dimensional cluster clients using RPI or deviation or mean. Plot result.
+
     :param csv_file: CSV file containing RPI and Deviation columns
-    :param usg_data: Data for clustering. Available: RPI{int_lеn}, Deviation, Mean
+    :param algorithm: The algorithm for clustering. Available: dbscan, kmeans
+    :param usg_data: Data for clustering. Available: Deviation, Mean
     :param int_len: Length of interval in RPI
     :param min_req: Minimal amount of request done by client to be considered for clustering
+    :param eps: Epsilon parameter for DBSCAN
+    :param min_samples: Minimal samples parameter for DBSCAN
+    :param n_clusters: Number of clusters for kmeans
     :return: None
     """
 
@@ -129,7 +164,11 @@ def one_dim_clustering(
         ]
     ).reshape(-1, 1)
 
-    db = DBSCAN(eps=eps, min_samples=min_samples, metric="euclidean").fit(datas)
+    db = (
+        KMeans(n_clusters=n_clusters, random_state=0).fit(datas)
+        if algorithm == "kmeans"
+        else DBSCAN(eps=eps, min_samples=min_samples, metric="euclidean").fit(datas)
+    )
 
     labels = db.labels_
     n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
@@ -143,7 +182,7 @@ def one_dim_clustering(
     requests = requests[["IP", "UA"]]
     requests["Label"] = labels
     requests[f"{usg_data}"] = datas
-    requests.to_csv("./dumps/1d_labeling.csv", index=False)
+    requests.to_csv("./dumps/1d_{algorithm}_labeling.csv", index=False)
 
     sort = requests.sort_values(by=f"{usg_data}", ascending=False)
     sort[:100].to_csv(f"./dumps/top_most_{usg_data}_1d.csv", index=False)
@@ -164,7 +203,9 @@ def one_dim_clustering(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Cluster using DBSCAN algorithm.")
+    parser = argparse.ArgumentParser(
+        description="Cluster using DBSCAN or KMeans algorithm."
+    )
     parser.add_argument(
         "--input",
         metavar="i",
@@ -173,12 +214,20 @@ if __name__ == "__main__":
         default="./dumps/requests.csv",
     )
     parser.add_argument(
+        "--algorithm",
+        dest="alg",
+        metavar="a",
+        type=str,
+        help="The clustering algorithm. Available: kmeans, dbscan",
+        default="kmeans",
+    )
+    parser.add_argument(
         "--dimensionality",
         dest="dim",
         metavar="d",
         type=int,
         help="Data dimension for clustering. Available: 1, 2",
-        default=0,
+        default=2,
     )
     parser.add_argument(
         "--interval-length",
@@ -194,7 +243,7 @@ if __name__ == "__main__":
         metavar="1d",
         type=str,
         help="Data from CSV for 1D clustering. Available: RPI{},Deviation,Mean",
-        default="Mean",
+        default="Deviation",
     )
     parser.add_argument(
         "--two-date",
@@ -207,7 +256,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--min-req",
         dest="min_req",
-        metavar="m",
+        metavar="mr",
         type=int,
         help="Minimal amount of requests done by client in one session to be considered for clustering",
         default=4,
@@ -226,42 +275,57 @@ if __name__ == "__main__":
         metavar="ms",
         type=int,
         help="Min samples parameter for dbscan",
-        default=6,
+        default=10,
     )
-
+    parser.add_argument(
+        "--n_clusters",
+        dest="n_clusters",
+        metavar="nc",
+        type=int,
+        help="Number of clusters for kmeans",
+        default=7,
+    )
     args = parser.parse_args()
     if args.dim == 1:
         one_dim_clustering(
             args.input,
+            args.alg,
             args.one_dim_date,
             args.int_len,
             args.min_req,
             args.eps,
             args.min_samples,
+            args.n_clusters,
         )
     elif args.dim == 2:
         two_dim_clustering(
             args.input,
+            args.alg,
             args.two_dim_date,
             args.int_len,
             args.min_req,
             args.eps,
             args.min_samples,
+            args.n_clusters,
         )
     else:
         one_dim_clustering(
             args.input,
+            args.alg,
             args.one_dim_date,
             args.int_len,
             args.min_req,
             args.eps,
             args.min_samples,
+            args.n_clusters,
         )
         two_dim_clustering(
             args.input,
+            args.alg,
             args.two_dim_date,
             args.int_len,
             args.min_req,
             args.eps,
             args.min_samples,
+            args.n_clusters,
         )
